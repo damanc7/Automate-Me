@@ -5,6 +5,9 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
+
+dayInput = input('What day do you want to input? ')
+
 driver = webdriver.Firefox()
 import time, csv, re
 import pandas as pd
@@ -12,8 +15,6 @@ fileName = 'enames2.04.xls'
 df = pd.read_excel(fileName)
 # strip out spaces in Program Name
 df['Program Name'] = df['Program Name'].str.strip()
-
-dayInput = input('What day do you want to input? ')
 
 #Dictionaries {'compass' : 'enames'}
 shownamesDict = {'Best of Rip City Drive': 'BEST OF RIP CITY DRIVE',
@@ -111,6 +112,7 @@ editLineup = driver.find_element_by_css_selector('.form-elem-title > button:nth-
 editLineup.click()
 time.sleep(2)
 # --------------------------------------First Day Start For Loop -----------------------------------------------
+countofDays = df.groupby('Day Of Week').size() # number of Mondays, Tuesdays, etc
 count = 0
 threeAMprogram = 0
 
@@ -199,29 +201,33 @@ for row in df.itertuples():
             typeSport.send_keys('Basketball-Professional')
             time.sleep(1)
             typeSport.send_keys(Keys.TAB)
-            titleTeam = row[6] #find way to create regex with 2 groups
+            titleTeam = row[7] #find way to create regex with 2 groups
             #away team
             awayTeam = re.findall(r'(.*?) @', titleTeam) #everything before the ' @' symbol
             awayTeam = awayTeam[0]
             eAwayteam = driver.find_element_by_css_selector('#yteamawaylookup')
             eAwayteam.send_keys(teamsDict[awayTeam]) #lookup in dictionary
-            time.sleep(1)
-            eAwayteam.send_keys(Keys.TAB)
+            time.sleep(3)
+            eAwayteam.send_keys(Keys.ENTER)
+            time.sleep(3)
             #home team
             homeTeam = re.findall(r'@ (.*)', titleTeam)  # everything after the '@ ' symbol
+            time.sleep(3)
             homeTeam = homeTeam[0]
             eHometeam = driver.find_element_by_css_selector('#yteamhomelookup')
             eHometeam.send_keys(teamsDict[homeTeam]) #lookup in dictionary
-            time.sleep(1)
-            eHometeam.send_keys(Keys.TAB)
+            time.sleep(3)
+            eHometeam.send_keys(Keys.ENTER)
+            time.sleep(3)
             # TODO subtitleOK changes css selector - find another way to locate
             subtitleOK = driver.find_element_by_css_selector('#sportsSubtitleBox > div:nth-child(6) > input:nth-child(1)')
             subtitleOK.click()
+        count += 1
         # CHECK IF PROGRAM SPANS 3AM then break into two programs
         if threeAMprogram == 0:
             if row[2][-2:] == 'AM': # if it is in the morning
                 if int(row[2][:2]) < 3:  # if start time hour is less than 3am (2am, 1am, 12am) Doesn't work for 11pm or 10pm
-                    if int(row[3][:2]) >= 3 or row[3] == '03:30 AM': #and if end time is 3am, 4am, 5am, 6am, etc
+                    if int(row[3][:2]) > 3 or row[3] == '03:30 AM': #and if end time is 3am, 4am, 5am, 6am, etc
                         # put endtime at 3am
                         endTime = '03:00:00 AM'
                         eEndtime = driver.find_element_by_xpath('//*[@id="rowEndTime"]')
@@ -234,7 +240,6 @@ for row in df.itertuples():
         # ACCEPT creation of new event
         acceptButton = driver.find_element_by_xpath('//*[@id="acceptButton"]')
         acceptButton.click()
-        count += 1
         # BYPASS ALERT - CONFIRM DELETION OF PRIOR PROGRAMS (if if pops up)
         try:
             WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="btnConf"]')))
@@ -245,7 +250,7 @@ for row in df.itertuples():
             # check same conditions as above
             if row[2][-2:] == 'AM':
                 if int(row[2][:2]) < 3:
-                    if int(row[3][:2]) >= 3 or row[3] == '03:30 AM':
+                    if int(row[3][:2]) > 3 or row[3] == '03:30 AM':
                         # put start at 3am
                         startTime = '03:00:00 AM'
                         # run entire For Loop again but change starttime to 3am
@@ -311,10 +316,6 @@ for row in df.itertuples():
                                 time.sleep(2)
                                 create_program_button.click()  # new program name created
                                 newShowsList.append(programName)  # add program name to list
-                                # # write appended list back to json file
-                                # with open('newShowsList.json', 'w') as file:
-                                #     file.write(json.dumps(newShowsList))
-                                #add suffix for new program
                                 eSuffix.click()
                                 eSuffix = driver.find_element_by_css_selector('#rowSuffix')
                                 eSuffix.click()
@@ -340,7 +341,7 @@ for row in df.itertuples():
                             typeSport.send_keys('Basketball-Professional')
                             time.sleep(1)
                             typeSport.send_keys(Keys.TAB)
-                            titleTeam = row[6] #find way to create regex with 2 groups
+                            titleTeam = row[7] #find way to create regex with 2 groups
                             #away team
                             awayTeam = re.findall(r'(.*?) @', titleTeam) #everything before the ' @' symbol
                             awayTeam = awayTeam[0]
@@ -362,24 +363,49 @@ for row in df.itertuples():
                         # ACCEPT creation of new event
                         acceptButton = driver.find_element_by_xpath('//*[@id="acceptButton"]')
                         acceptButton.click()
-                        count += 1
                         # CONFIRM DELETION OF PRIOR PROGRAMS (if if pops up)
                         try:
                             WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="btnConf"]')))
                             driver.find_element_by_xpath('//*[@id="btnConf"]').click()
                         except TimeoutException:
                             continue
-
-        # continue to next program and loop through
+        if count == int(countofDays[day]):  # if it has done all loops of current day
+            day = daysofWeek[daysofWeek.index(day) + 1]  # change day to next day and continue loop
+            nextDayInput = input('Would you like to submit and do the next day? ')
+            if nextDayInput == 'Yes':
+                submitLineup = driver.find_element_by_css_selector('#submitLineupDetails')
+                submitLineup.click()
+                #reset count to keep track of days
+                count = 0
+                time.sleep(7)
+                #accept alert: Submit Successful
+                submitOK = driver.find_element_by_css_selector('#btnAlert')
+                submitOK.click()
+                time.sleep(2)
+                #Navigate to next date
+                for row in df.itertuples():
+                    if row[1] == day:
+                        dateofDay = df['Start Date'][row[0]]
+                dayLineup = dateofDay.strftime("%m/%d/%Y")
+                selectedDate = driver.find_element_by_css_selector('#selectedDate')
+                selectedDate.click()
+                time.sleep(1)
+                ActionChains(driver).key_down(Keys.CONTROL).send_keys('a').key_up(Keys.CONTROL).perform()
+                selectedDate.send_keys(dayLineup)
+                time.sleep(1)
+                editLineup = driver.find_element_by_css_selector('#editLineupDetails')
+                editLineup.click()
+                time.sleep(2)
+            else: break
 
 # --------------------------------------Second Day Start For Loop -----------------------------------------------
-submitLineup = driver.find_element_by_css_selector('#submitLineupDetails')
-nextDayInput = input('Would you like to submit and do the next day? ')
-if nextDayInput == 'Yes':
-    submitLineup.click()
-    # change day to next day
-    day = daysofWeek[daysofWeek.index(day)+1]
-    # run above loop
+# submitLineup = driver.find_element_by_css_selector('#submitLineupDetails')
+# nextDayInput = input('Would you like to submit and do the next day? ')
+# if nextDayInput == 'Yes':
+#     submitLineup.click()
+#     # change day to next day
+#     day = daysofWeek[daysofWeek.index(day)+1]
+#     # run above loop with new day
 
 # if dayInput == 'All' then loop through Monday - Sunday
     #otherwise ask if I want to submit the day and do the next day
